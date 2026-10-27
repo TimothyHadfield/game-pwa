@@ -1,0 +1,8 @@
+{
+  "name": "game-pwa",
+  "private": true,
+  "description": "Home-screen install + offline play for Tim's board game sites, without ever serving an old build. No dependencies; tests use Playwright from ~/.claude/tools.",
+  "scripts": {
+    "test": "node test/run.mjs && node test/run.mjs --engine chromium && node test/run.mjs --no-kit"
+  }
+}

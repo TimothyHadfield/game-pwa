@@ -1,5 +1,6 @@
 node_modules/
 *.log
 .claude/
-*.png
-!icons/*.png
+test/fixture/sw.js
+test/fixture/js/pwa.js
+test/fixture/manifest.webmanifest

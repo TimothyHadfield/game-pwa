@@ -1,0 +1,7 @@
+{
+  "repo": "fixture",
+  "ready": "document.querySelector('#move[data-ready]') !== null",
+  "play": ["document.getElementById('move').click()"],
+  "played": "document.getElementById('reply').textContent === '> computer answered 2'",
+  "safe": "window.rest()"
+}
