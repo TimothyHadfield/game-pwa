@@ -13,7 +13,8 @@
 //     "ready": "document.querySelector('#bigGrid .cell') !== null",   // true once the app has drawn
 //     "play": ["...statements that start a game vs the computer and make one move..."],
 //     "played": "...true once the computer has answered that move...",
-//     "safe": "...optional statements that put the game at a safe resting point..." }
+//     "safe": "...optional statements that put the game at a safe resting point...",
+//     "debug": "...optional expression printed when the offline move check fails..." }
 //
 // The server acts like GitHub Pages: Cache-Control max-age=600, Last-Modified = deploy time on every file,
 // ETag + 304. A "deploy" changes the deploy time, adds <meta name="pwa-check-build" content="N"> to the page
@@ -131,7 +132,9 @@ async function main() {
     await page.goto(BASE, { waitUntil: "load" }).catch(e => errors.push("offline open: " + e.message));
     check("offline cold open draws the game", await waitFor(page, CFG.ready));
     for (const s of CFG.play || []) { await page.evaluate(s).catch(e => errors.push("play step: " + e.message)); await sleep(300); }
-    check("offline game vs computer: computer answers a move", await waitFor(page, CFG.played, 15000));
+    const answered = await waitFor(page, CFG.played, 15000);
+    check("offline game vs computer: computer answers a move", answered,
+      !answered && CFG.debug ? String(await page.evaluate(CFG.debug).catch(e => e.message)) : "");
     await sleep(800); await shot(page, "offline-game");
     net.down = false;
     if (ENGINE === "chromium") await ctx.setOffline(false);
