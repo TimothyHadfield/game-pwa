@@ -1,0 +1,4 @@
+# files games copy byte-for-byte: never convert line endings
+*.js -text
+*.mjs -text
+*.webmanifest -text
