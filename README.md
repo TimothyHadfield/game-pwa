@@ -48,7 +48,9 @@ $0, no build step, no dependencies. Pilots: [Battleship](https://timothyhadfield
    <meta name="apple-mobile-web-app-status-bar-style" content="black">
    <meta name="apple-mobile-web-app-title" content="<same as short_name>">
    ```
-   and **before** the game's main script (so `window.PWA` exists when the game starts):
+   and **just before** the game's main script (so `window.PWA` exists when the game starts). Keep `defer`
+   if the main script is `type="module"` (Battleship); drop it if the main script is a plain `<script>`
+   (Checkers), or the game runs before `pwa.js` does:
    ```html
    <script src="js/pwa.js?v=N" data-version="N" defer></script>
    ```
