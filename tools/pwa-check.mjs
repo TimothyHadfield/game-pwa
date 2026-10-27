@@ -1,4 +1,4 @@
-// game-pwa pwa-check 1.0.0: proves a game installs its offline copy, plays offline vs the computer,
+// game-pwa pwa-check 1.2.0: proves a game installs its offline copy, plays offline vs the computer,
 // and never shows an old build once a new one is deployed. Copy UNCHANGED to the game's tools/ folder.
 //
 //   node tools/pwa-check.mjs                run every check (WebKit, iPhone 393x659), exit 1 on any failure
@@ -6,6 +6,8 @@
 //   options: --dir <game folder> (default: the folder above tools/)   --port <n> (default random high)
 //            --engine webkit|chromium (default webkit)   --config <file> (default <dir>/tests/pwa-check.json)
 //            --shots <folder> (save screenshots: offline game, the "New version" pill)
+//            --idle <ms> (default 15000: no page open this long before the offline cold open, so the
+//            browser stops the idle service worker first, as a phone does)
 //
 // Config (tests/pwa-check.json), all JavaScript run in the page. After "play" the game must be mid-game (and
 // still mid-game after a reload, so a saved game), where PWA.safeToReload() must return false:
@@ -20,12 +22,12 @@
 // ETag + 304. A "deploy" changes the deploy time, adds <meta name="pwa-check-build" content="N"> to the page
 // and bumps the page's data-version for pwa.js. Any request that leaves localhost fails the run.
 import http from "node:http";
-import { readFileSync, existsSync, statSync } from "node:fs";
+import { readFileSync, existsSync, statSync, mkdtempSync, rmSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { dirname, join, resolve, extname, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
-import { homedir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 
 const argv = process.argv.slice(2);
 const opt = (n, d) => { const i = argv.indexOf("--" + n); return i >= 0 && argv[i + 1] ? argv[i + 1] : d; };
@@ -37,6 +39,7 @@ const PORT = +opt("port", 20000 + Math.floor(Math.random() * 20000));
 const ENGINE = opt("engine", "webkit");
 const SERVE_ONLY = argv.includes("--serve");
 const SHOTS = opt("shots", "");                       // folder: save a screenshot at each key step
+const IDLE = +opt("idle", 15000);                     // ms with no page open before the offline cold open
 
 const deploy = { n: 0, time: Math.floor(Date.now() / 1000) * 1000 - 3600e3 };
 const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".mjs": "text/javascript",
@@ -98,10 +101,13 @@ async function main() {
   await new Promise(r => server.listen(PORT, r));
   if (SERVE_ONLY) { console.log("serving " + BASE + " (Ctrl+C to stop)"); return; }
   const pw = createRequire(join(homedir(), ".claude", "tools", "package.json"))("playwright");
-  const browser = await pw[ENGINE].launch();
+  // An on-disk profile, like a phone. Playwright's default in-memory profile loses WebKit's cached
+  // files once the idle service worker is stopped, which made "offline cold open" fail at random.
+  const profile = mkdtempSync(join(tmpdir(), "pwa-check-"));
   const errors = [];
+  let ctx = null;
   try {
-    const ctx = await browser.newContext({ viewport: { width: 393, height: 659 }, isMobile: ENGINE !== "firefox",
+    ctx = await pw[ENGINE].launchPersistentContext(profile, { viewport: { width: 393, height: 659 }, isMobile: ENGINE !== "firefox",
       hasTouch: true, deviceScaleFactor: 2, serviceWorkers: "allow",
       userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1" });
     const watch = p => {
@@ -136,9 +142,12 @@ async function main() {
     await page.reload({ waitUntil: "load" }).catch(e => errors.push("offline reload: " + e.message));
     check("offline reload draws the game", await waitFor(page, "!window.__beforeReload && (" + CFG.ready + ")"));
     await page.close();
+    await sleep(IDLE);                                   // like a phone: the idle worker is stopped, then restarted
     page = await ctx.newPage(); watch(page);
     await page.goto(BASE, { waitUntil: "load" }).catch(e => errors.push("offline open: " + e.message));
-    check("offline cold open draws the game", await waitFor(page, CFG.ready));
+    // served by the worker, not by the browser's own HTTP cache (which the on-disk profile also has)
+    const BY_SW = "navigator.serviceWorker && navigator.serviceWorker.controller !== null && ";
+    check("offline cold open draws the game", await waitFor(page, BY_SW + "(" + CFG.ready + ")"));
     for (const s of CFG.play || []) { await page.evaluate(s).catch(e => errors.push("play step: " + e.message)); await sleep(300); }
     const answered = await waitFor(page, CFG.played, 15000);
     check("offline game vs computer: computer answers a move", answered,
@@ -153,7 +162,7 @@ async function main() {
     page = await ctx.newPage(); watch(page);
     const t0 = Date.now();
     page.goto(BASE, { waitUntil: "load" }).catch(() => {});
-    const opened = await waitFor(page, CFG.ready, 12000);
+    const opened = await waitFor(page, BY_SW + "(" + CFG.ready + ")", 12000);
     check("weak signal: opens from the offline copy within 12 s", opened, ((Date.now() - t0) / 1000).toFixed(1) + " s");
     net.slow = 0;
     for (const sock of net.held) sock.destroy();          // the weak signal ends: drop the stuck requests
@@ -198,10 +207,10 @@ async function main() {
 
     const real = errors.filter(e => !/Failed to fetch|Load failed|NetworkError|network connection was lost|internet connection appears to be offline/i.test(e));
     check("no page errors and nothing left localhost", real.length === 0, real.slice(0, 5).join(" | "));
-    await ctx.close();
   } finally {
-    await browser.close();
+    if (ctx) await ctx.close().catch(() => {});
     server.close();
+    try { rmSync(profile, { recursive: true, force: true }); } catch (e) { /* a locked temp folder is harmless */ }
   }
   const fails = results.filter(x => !x).length;
   console.log(`\n${results.length - fails}/${results.length} passed (${ENGINE}, ${REPO})`);

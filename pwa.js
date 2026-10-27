@@ -1,4 +1,4 @@
-/* game-pwa pwa.js 1.1.0: registers sw.js and keeps an open page on the newest build.
+/* game-pwa pwa.js 1.2.0: registers sw.js and keeps an open page on the newest build.
  * Copy UNCHANGED to the game's js/ folder and load it from index.html:
  *   <script src="js/pwa.js?v=13" data-version="13" defer></script>
  * data-version = the game's build number (bump it with the other ?v= tags). Optional data-sw="sw.js".
@@ -14,7 +14,7 @@
  */
 (function () {
   "use strict";
-  var KIT = "1.1.0";
+  var KIT = "1.2.0";
   var me = document.currentScript;
   var build = (me && me.getAttribute("data-version")) || "0";
   var swPath = (me && me.getAttribute("data-sw")) || "sw.js";

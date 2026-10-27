@@ -85,7 +85,7 @@ deploy check now) · `PWA.onUpdate(fn)` (called with `{build, lastModified}` whe
 ## Tests
 `npm test` runs `test/run.mjs`: a tiny fixture game (module imports, a Web Worker with `importScripts`, a CSS
 `url()`, a CDN-only online path) served like GitHub Pages (`max-age=600`, `Last-Modified`, ETag/304), checked in
-WebKit and Chromium at 393×659, plus `--no-kit` (the same fixture without the kit must fail: 4/18).
+WebKit and Chromium at 393×659, plus `--no-kit` (the same fixture without the kit must fail: 3/18).
 Checks: worker controls the page; the game says mid-game is not a safe moment; one cache named for folder + build holding only the game's own files;
 offline reload and offline cold open draw the game; a move vs the computer is answered offline; with every reply
 taking 30 s the game still opens from the offline copy (about 6 s); the next open
@@ -93,7 +93,9 @@ after a deploy shows the new build in one load; the old cache is deleted; a depl
 and does not reload; the pill fits 393 px; tapping it loads the new build; at a safe point the page moves to the
 new build by itself; no page errors and no request leaves localhost.
 Offline in the test = the server drops every connection (WebKit's `setOffline` also blocks the worker's own
-replies, which a real phone doesn't).
+replies, which a real phone doesn't). The browser runs with an on-disk profile like a phone's, and the offline
+cold open comes after 15 s with no page open (`--idle <ms>`), so the browser has stopped the idle worker and
+must restart it; the cold open and weak-signal checks also require the worker (not the HTTP cache) to serve it.
 
 ## Not verified
 - A real iPhone's home-screen app (standalone window, status bar, how long iOS keeps the cache: Safari may
@@ -103,6 +105,11 @@ replies, which a real phone doesn't).
 - In the home-screen app, the "All games" link (`../`) leaves the game's scope, so iOS opens it in a Safari sheet.
 
 ## Changelog
+- **1.2.0** (2026-10-27): pwa-check fix for "offline cold open" failing at random in WebKit. Cause: the
+  check's in-memory browser profile, where WebKit drops cached files once the idle worker is stopped (a
+  phone's storage is on disk; with an on-disk profile all files survive). The check now uses an on-disk temp
+  profile, waits 15 s idle before the cold open, and requires the worker to serve it. `sw.js`/`pwa.js`:
+  version stamp only.
 - **1.1.0** (2026-10-27, after review, before any game went live): weak signal falls back to the exact saved
   copy after 5 s (then 0.4 s for 30 s); an install hit by a network error fails and keeps the old copy; a
   retired worker never re-creates an old cache; redirected page opens work; auto-reload re-asks

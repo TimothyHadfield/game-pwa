@@ -1,4 +1,4 @@
-/* game-pwa sw.js 1.1.0: network-first service worker for Tim's board game sites.
+/* game-pwa sw.js 1.2.0: network-first service worker for Tim's board game sites.
  * Copy this file UNCHANGED to the game's root folder (next to index.html). js/pwa.js registers it as
  * "sw.js?v=<build>", so the build number lives in index.html, not here.
  *
@@ -17,7 +17,7 @@
  *  - Games only: never use it on the Hub at "/" (its scope would cover every game).
  */
 "use strict";
-const KIT = "1.1.0";
+const KIT = "1.2.0";
 const BUILD = new URL(self.location.href).searchParams.get("v") || "0";
 const SCOPE = self.registration.scope;                       // e.g. https://x.github.io/battleship/
 const PREFIX = "pwa:" + new URL(SCOPE).pathname + ":";
