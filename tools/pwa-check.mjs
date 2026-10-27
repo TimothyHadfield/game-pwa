@@ -6,7 +6,8 @@
 //   options: --dir <game folder> (default: the folder above tools/)   --port <n> (default random high)
 //            --engine webkit|chromium (default webkit)   --config <file> (default <dir>/tests/pwa-check.json)
 //
-// Config (tests/pwa-check.json), all JavaScript run in the page:
+// Config (tests/pwa-check.json), all JavaScript run in the page. After "play" the game must be mid-game (and
+// still mid-game after a reload, so a saved game), where PWA.safeToReload() must return false:
 //   { "repo": "battleship",                         // Pages folder name: the game is served at /<repo>/
 //     "ready": "document.querySelector('#bigGrid .cell') !== null",   // true once the app has drawn
 //     "play": ["...statements that start a game vs the computer and make one move..."],
@@ -146,6 +147,8 @@ async function main() {
 
     // 4. Deploy while the page is open, mid-game: a polite pill, no reload; tap reloads to the new build
     deploy.n = 2; deploy.time += 120e3;
+    const midSafe = await page.evaluate(() => !!window.PWA && typeof window.PWA.safeToReload === "function" && window.PWA.safeToReload());
+    check("game says mid-game is not a safe moment to reload", midSafe === false);
     await page.evaluate(() => { window.__stay = 1; if (window.PWA) window.PWA.safeToReload = () => false; });
     await page.evaluate(() => window.PWA && window.PWA.check());
     const pill = await waitFor(page, "document.querySelector('.pwa-pill') !== null", 4000);

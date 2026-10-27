@@ -78,8 +78,8 @@ deploy check now) · `PWA.onUpdate(fn)` (called with `{build, lastModified}` whe
 ## Tests
 `npm test` runs `test/run.mjs`: a tiny fixture game (module imports, a Web Worker with `importScripts`, a CSS
 `url()`, a CDN-only online path) served like GitHub Pages (`max-age=600`, `Last-Modified`, ETag/304), checked in
-WebKit and Chromium at 393×659, plus `--no-kit` (the same fixture without the kit must fail: 3/16).
-Checks: worker controls the page; one cache named for folder + build holding only the game's own files;
+WebKit and Chromium at 393×659, plus `--no-kit` (the same fixture without the kit must fail: 4/17).
+Checks: worker controls the page; the game says mid-game is not a safe moment; one cache named for folder + build holding only the game's own files;
 offline reload and offline cold open draw the game; a move vs the computer is answered offline; the next open
 after a deploy shows the new build in one load; the old cache is deleted; a deploy seen mid-game shows the pill
 and does not reload; the pill fits 393 px; tapping it loads the new build; at a safe point the page moves to the
