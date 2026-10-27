@@ -1,4 +1,4 @@
-/* game-pwa pwa.js 1.0.0: registers sw.js and keeps an open page on the newest build.
+/* game-pwa pwa.js 1.1.0: registers sw.js and keeps an open page on the newest build.
  * Copy UNCHANGED to the game's js/ folder and load it from index.html:
  *   <script src="js/pwa.js?v=13" data-version="13" defer></script>
  * data-version = the game's build number (bump it with the other ?v= tags). Optional data-sw="sw.js".
@@ -14,7 +14,7 @@
  */
 (function () {
   "use strict";
-  var KIT = "1.0.0";
+  var KIT = "1.1.0";
   var me = document.currentScript;
   var build = (me && me.getAttribute("data-version")) || "0";
   var swPath = (me && me.getAttribute("data-sw")) || "sw.js";
@@ -27,7 +27,7 @@
     kit: KIT, version: build, safeToReload: null,
     onUpdate: function (fn) { listeners.push(fn); },
     check: function () { return check(true); },
-    reload: reload,
+    reload: function () { reload(false); },
     status: status
   };
 
@@ -41,8 +41,13 @@
     });
   }
 
-  function reload() {
-    var done = function () { location.reload(); };
+  // auto: a reload the kit started by itself; it re-asks the game right before reloading (a player may
+  // have started something in the moment it took) and shows the pill instead if the answer changed.
+  function reload(auto) {
+    var done = function () {
+      if (auto === true && !safe()) { showPill(Date.now()); return; }
+      location.reload();
+    };
     var t = setTimeout(done, 2500);
     var upd = ("serviceWorker" in navigator) ? navigator.serviceWorker.getRegistration().then(function (r) { return r && r.update(); }) : Promise.resolve();
     Promise.all([upd, fetch(pageUrl(), { cache: "reload" })]).catch(function () {}).then(function () { clearTimeout(t); done(); });
@@ -66,7 +71,7 @@
       go.type = "button"; go.className = "pwa-reload";
       go.textContent = "New version — tap to reload";
       go.style.cssText = "all:unset;cursor:pointer;padding:10px 6px 10px 16px;white-space:nowrap";
-      go.addEventListener("click", function (e) { e.stopPropagation(); go.textContent = "Reloading…"; reload(); });
+      go.addEventListener("click", function (e) { e.stopPropagation(); go.textContent = "Reloading…"; reload(false); });
       var x = document.createElement("button");
       x.type = "button"; x.className = "pwa-close"; x.setAttribute("aria-label", "Later");
       x.textContent = "×";
@@ -85,7 +90,7 @@
     try { tried = +sessionStorage.getItem(key) || 0; } catch (e) {}
     if (document.visibilityState === "visible" && safe() && tried !== stamp) {
       try { sessionStorage.setItem(key, String(stamp)); } catch (e) {}
-      reload();
+      reload(true);
     } else {
       showPill(stamp);
     }

@@ -17,8 +17,11 @@ $0, no build step, no dependencies. Pilots: [Battleship](https://timothyhadfield
 
 - **Network first, always.** Every request for the game's own files goes to the network, revalidated past the
   browser's HTTP cache (`cache: "no-cache"`; Pages answers a quick 304). The saved copy is used **only when the
-  network fails** (airplane mode, no signal, server down). So online you always get exactly what Pages serves,
-  and the worker even removes Pages' 10-minute HTTP-cache staleness.
+  network fails** (airplane mode, no signal, server down) **or takes over 5 s** (a weak signal; then only the
+  exact same URL is used, so a page never mixes builds, and for the next 30 s it waits only 0.4 s). So online
+  you get exactly what Pages serves, and the worker even removes Pages' 10-minute HTTP-cache staleness.
+- **A broken install changes nothing.** If the new build's install can't reach a file (network error), the
+  install fails and the old worker keeps its complete offline copy.
 - **Scoped to the game's folder.** Pages serves every game on one origin (`timothyhadfield.github.io/<repo>/`).
   The worker's scope is `/<repo>/`; anything outside it (Firestore, Google sign-in, the Firebase CDN, fonts,
   other games, the Hub) passes straight through and is **never cached**. Non-GET and Range requests pass through.
@@ -30,6 +33,7 @@ $0, no build step, no dependencies. Pilots: [Battleship](https://timothyhadfield
   deploy: if the game says it's a safe moment, the page reloads itself once; otherwise a small
   **"New version — tap to reload"** pill appears at the top (× hides it until the next deploy).
 - **Escape hatch:** add `?nosw` to any URL to bypass the worker for that request.
+- **Games only.** Never put it on the Hub at `/`: its scope would cover every game folder.
 
 ## Add it to a game (about 10 minutes)
 
@@ -62,7 +66,8 @@ $0, no build step, no dependencies. Pilots: [Battleship](https://timothyhadfield
    ```
    Return `true` only when nothing would be lost: no online room, no open sheet/confirm box, no text field
    focused, no move animating or computer thinking, and either the game is over or the player is on a tab
-   with no unsaved state while the game in progress is saved. When in doubt return `false` (the pill shows).
+   with no unsaved state (no running simulation either) while the game in progress is saved. When in doubt
+   return `false` (the pill shows). The kit asks again right before reloading.
 6. Offline play must not need the network: online code loads Firebase with a dynamic `import()` only when the
    player picks Online (the shared `_online` kit already does). The computer opponent's worker scripts are
    found automatically (the worker crawls the page, its scripts, `importScripts` and CSS `url()`s, and also
@@ -80,9 +85,10 @@ deploy check now) · `PWA.onUpdate(fn)` (called with `{build, lastModified}` whe
 ## Tests
 `npm test` runs `test/run.mjs`: a tiny fixture game (module imports, a Web Worker with `importScripts`, a CSS
 `url()`, a CDN-only online path) served like GitHub Pages (`max-age=600`, `Last-Modified`, ETag/304), checked in
-WebKit and Chromium at 393×659, plus `--no-kit` (the same fixture without the kit must fail: 4/17).
+WebKit and Chromium at 393×659, plus `--no-kit` (the same fixture without the kit must fail: 4/18).
 Checks: worker controls the page; the game says mid-game is not a safe moment; one cache named for folder + build holding only the game's own files;
-offline reload and offline cold open draw the game; a move vs the computer is answered offline; the next open
+offline reload and offline cold open draw the game; a move vs the computer is answered offline; with every reply
+taking 30 s the game still opens from the offline copy (about 6 s); the next open
 after a deploy shows the new build in one load; the old cache is deleted; a deploy seen mid-game shows the pill
 and does not reload; the pill fits 393 px; tapping it loads the new build; at a safe point the page moves to the
 new build by itself; no page errors and no request leaves localhost.
@@ -92,9 +98,15 @@ replies, which a real phone doesn't).
 ## Not verified
 - A real iPhone's home-screen app (standalone window, status bar, how long iOS keeps the cache: Safari may
   evict a site's storage after ~7 days without a visit). Checked only in headless WebKit and Chromium.
+- iOS keeps the home-screen app's storage apart from Safari's: the icon must be opened once online before it
+  works offline.
 - In the home-screen app, the "All games" link (`../`) leaves the game's scope, so iOS opens it in a Safari sheet.
 
 ## Changelog
+- **1.1.0** (2026-10-27, after review, before any game went live): weak signal falls back to the exact saved
+  copy after 5 s (then 0.4 s for 30 s); an install hit by a network error fails and keeps the old copy; a
+  retired worker never re-creates an old cache; redirected page opens work; auto-reload re-asks
+  `safeToReload` right before reloading. pwa-check: weak-signal step, `--shots`, `debug`.
 - **1.0.0** (2026-10-27): first release. `sw.js` network-first with build-keyed offline cache and crawling
   precache; `pwa.js` register + Last-Modified deploy check + safe auto-reload / "New version" pill;
   manifest template; `make-icons.mjs`; `pwa-check.mjs` + fixture tests. Pilots: Battleship, Checkers.

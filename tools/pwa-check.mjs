@@ -53,9 +53,17 @@ function body(file) {
   return buf;
 }
 
-const net = { down: false };
+const net = { down: false, slow: 0, held: new Set() };
 const server = http.createServer((req, res) => {
   if (net.down) { req.socket.destroy(); return; }       // "offline": every request fails at the network level
+  if (net.slow) {                                      // weak signal: answer after net.slow ms
+    net.held.add(req.socket);
+    setTimeout(() => { net.held.delete(req.socket); if (!res.destroyed) serve(req, res); }, net.slow);
+    return;
+  }
+  serve(req, res);
+});
+function serve(req, res) {
   const url = new URL(req.url, "http://x");
   let path = decodeURIComponent(url.pathname);
   if (path === "/" + REPO) { res.writeHead(301, { Location: "/" + REPO + "/" }); return res.end(); }
@@ -73,7 +81,7 @@ const server = http.createServer((req, res) => {
   if (req.headers["if-none-match"] === etag) { res.writeHead(304, head); return res.end(); }
   res.writeHead(200, { ...head, "Content-Length": buf.length });
   res.end(req.method === "HEAD" ? undefined : buf);
-});
+}
 
 const BASE = `http://localhost:${PORT}/${REPO}/`;
 const results = [];
@@ -138,6 +146,18 @@ async function main() {
     await sleep(800); await shot(page, "offline-game");
     net.down = false;
     if (ENGINE === "chromium") await ctx.setOffline(false);
+
+    // 2b. Weak signal (every reply takes 30 s): the game still opens from the offline copy in seconds
+    net.slow = 30000;
+    await page.close();
+    page = await ctx.newPage(); watch(page);
+    const t0 = Date.now();
+    page.goto(BASE, { waitUntil: "load" }).catch(() => {});
+    const opened = await waitFor(page, CFG.ready, 12000);
+    check("weak signal: opens from the offline copy within 12 s", opened, ((Date.now() - t0) / 1000).toFixed(1) + " s");
+    net.slow = 0;
+    for (const sock of net.held) sock.destroy();          // the weak signal ends: drop the stuck requests
+    net.held.clear();
 
     // 3. New deploy, page closed: the next open must show it straight away (no hard refresh, no second load)
     deploy.n = 1; deploy.time += 120e3;
