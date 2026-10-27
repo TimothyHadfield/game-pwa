@@ -5,6 +5,7 @@
 //   node tools/pwa-check.mjs --serve        only serve the game like GitHub Pages at http://localhost:<port>/<repo>/
 //   options: --dir <game folder> (default: the folder above tools/)   --port <n> (default random high)
 //            --engine webkit|chromium (default webkit)   --config <file> (default <dir>/tests/pwa-check.json)
+//            --shots <folder> (save screenshots: offline game, the "New version" pill)
 //
 // Config (tests/pwa-check.json), all JavaScript run in the page. After "play" the game must be mid-game (and
 // still mid-game after a reload, so a saved game), where PWA.safeToReload() must return false:
@@ -34,6 +35,7 @@ const REPO = CFG.repo;
 const PORT = +opt("port", 20000 + Math.floor(Math.random() * 20000));
 const ENGINE = opt("engine", "webkit");
 const SERVE_ONLY = argv.includes("--serve");
+const SHOTS = opt("shots", "");                       // folder: save a screenshot at each key step
 
 const deploy = { n: 0, time: Math.floor(Date.now() / 1000) * 1000 - 3600e3 };
 const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".mjs": "text/javascript",
@@ -76,6 +78,7 @@ const BASE = `http://localhost:${PORT}/${REPO}/`;
 const results = [];
 const check = (name, ok, detail = "") => { results.push(ok); console.log(`${ok ? "PASS" : "FAIL"}  ${name}${detail ? "  (" + detail + ")" : ""}`); };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+const shot = (page, name) => SHOTS ? page.screenshot({ path: join(SHOTS, ENGINE + "-" + name + ".png") }).catch(() => {}) : null;
 
 async function waitFor(page, expr, ms = 8000) {
   try { await page.waitForFunction(expr, null, { timeout: ms, polling: 100 }); return true; } catch (e) { return false; }
@@ -129,6 +132,7 @@ async function main() {
     check("offline cold open draws the game", await waitFor(page, CFG.ready));
     for (const s of CFG.play || []) { await page.evaluate(s).catch(e => errors.push("play step: " + e.message)); await sleep(300); }
     check("offline game vs computer: computer answers a move", await waitFor(page, CFG.played, 15000));
+    await sleep(800); await shot(page, "offline-game");
     net.down = false;
     if (ENGINE === "chromium") await ctx.setOffline(false);
 
@@ -154,6 +158,7 @@ async function main() {
     const pill = await waitFor(page, "document.querySelector('.pwa-pill') !== null", 4000);
     check("open page mid-game: shows 'New version' pill, does not reload", pill && await page.evaluate(() => window.__stay === 1));
     const pillBox = pill ? await page.evaluate(() => { const r = document.querySelector('.pwa-pill').getBoundingClientRect(); return { l: r.left, r: r.right, t: r.top }; }) : null;
+    await shot(page, "new-version-pill");
     check("pill fits the screen", !!pillBox && pillBox.l >= 0 && pillBox.r <= 393 && pillBox.t >= 0, JSON.stringify(pillBox));
     if (pill) await Promise.all([page.waitForEvent("load", { timeout: 8000 }).catch(() => {}), page.click(".pwa-reload")]);
     await waitFor(page, CFG.ready);
