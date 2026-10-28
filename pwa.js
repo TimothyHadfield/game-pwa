@@ -1,4 +1,4 @@
-/* game-pwa pwa.js 1.3.0: registers sw.js and keeps an open page on the newest build.
+/* game-pwa pwa.js 1.4.0: registers sw.js and keeps an open page on the newest build.
  * Copy UNCHANGED to the game's js/ folder and load it from index.html:
  *   <script src="js/pwa.js?v=13" data-version="13" defer></script>
  * data-version = the game's build number (bump it with the other ?v= tags). Optional data-sw="sw.js".
@@ -16,7 +16,7 @@
  */
 (function () {
   "use strict";
-  var KIT = "1.3.0";
+  var KIT = "1.4.0";
   var me = document.currentScript;
   var build = (me && me.getAttribute("data-version")) || "0";
   var swPath = (me && me.getAttribute("data-sw")) || "sw.js";
@@ -25,6 +25,17 @@
   var base = Date.parse(document.lastModified);
   var lastCheck = 0, shownFor = 0, dismissed = 0, listeners = [], pill = null;
   var http = location.protocol === "https:" || location.protocol === "http:";
+  // Leaving the page: the kit's own fetches still in flight are aborted first (WebKit logs a fetch the
+  // navigation cuts off as a console error, "... due to access control checks"), and no new check starts.
+  var flying = [], leftAt = 0, gone = false;
+  function own(opts) {
+    if (typeof AbortController !== "function") return { opts: opts, done: function () {} };
+    var c = new AbortController();
+    opts.signal = c.signal; flying.push(c);
+    return { opts: opts, done: function () { var i = flying.indexOf(c); if (i >= 0) flying.splice(i, 1); } };
+  }
+  function abortAll() { flying.splice(0).forEach(function (c) { try { c.abort(); } catch (e) {} }); }
+  function leaving() { return gone || Date.now() - leftAt < 3000; }
 
   var PWA = window.PWA = {
     kit: KIT, version: build, safeToReload: null,
@@ -47,13 +58,18 @@
   // auto: a reload the kit started by itself; it re-asks the game right before reloading (a player may
   // have started something in the moment it took) and shows the pill instead if the answer changed.
   function reload(auto) {
+    var f = own({ cache: "reload" });
+    var once = false;
     var done = function () {
+      if (once) return; once = true;
       if (auto === true && !safe()) { showPill(Date.now()); return; }
+      abortAll();                                   // a fetch still running after 2.5 s: abort it, don't cut it
       location.reload();
     };
     var t = setTimeout(done, 2500);
     var upd = ("serviceWorker" in navigator) ? navigator.serviceWorker.getRegistration().then(function (r) { return r && r.update(); }) : Promise.resolve();
-    Promise.all([upd, fetch(pageUrl(), { cache: "reload" })]).catch(function () {}).then(function () { clearTimeout(t); done(); });
+    var page = fetch(pageUrl(), f.opts).then(f.done, function (e) { f.done(); throw e; });
+    Promise.all([upd, page]).catch(function () {}).then(function () { clearTimeout(t); done(); });
   }
 
   function safe() {
@@ -100,15 +116,17 @@
   }
 
   function check(force) {
-    if (!http || isNaN(base)) return Promise.resolve(false);
+    if (!http || isNaN(base) || leaving()) return Promise.resolve(false);
     var now = Date.now();
     if (!force && now - lastCheck < 60000) return Promise.resolve(false);
     lastCheck = now;
-    return fetch(pageUrl(), { method: "HEAD", cache: "no-store" }).then(function (r) {
+    var f = own({ method: "HEAD", cache: "no-store" });
+    return fetch(pageUrl(), f.opts).then(function (r) {
+      f.done();
       var lm = Date.parse(r.headers.get("Last-Modified") || "");
-      if (r.ok && lm > base) { found(lm); return true; }
+      if (r.ok && lm > base && !leaving()) { found(lm); return true; }
       return false;
-    }).catch(function () { return false; });
+    }).catch(function () { f.done(); return false; });   // offline, or aborted because the page is leaving
   }
 
   function register() {
@@ -133,5 +151,9 @@
   setTimeout(function () { check(true); }, 1500);
   document.addEventListener("visibilitychange", function () { if (document.visibilityState === "visible") check(false); });
   addEventListener("online", function () { check(true); });
-  addEventListener("pageshow", function (e) { if (e.persisted) check(true); });
+  // beforeunload: a navigation is starting (it may still be cancelled, so checks resume after 3 s);
+  // pagehide: the page is going away (or into the back/forward cache), pageshow: it's back.
+  addEventListener("beforeunload", function () { leftAt = Date.now(); abortAll(); });
+  addEventListener("pagehide", function () { gone = true; abortAll(); });
+  addEventListener("pageshow", function (e) { gone = false; leftAt = 0; if (e.persisted) check(true); });
 })();

@@ -105,6 +105,9 @@ Offline in the test = the server drops every connection (WebKit's `setOffline` a
 replies, which a real phone doesn't). The browser runs with an on-disk profile like a phone's, and the offline
 cold open comes after 15 s with no page open (`--idle <ms>`), so the browser has stopped the idle worker and
 must restart it; the cold open and weak-signal checks also require the worker (not the HTTP cache) to serve it.
+`test/reload.mjs` (also in `npm test`, WebKit + Chromium): the page leaves (browser reload, going to another
+page, the game's own `location.reload()`) while a deploy check is in flight and the next page is slow to
+arrive; the check must be aborted at once, no check may start while the page is leaving, and no console error.
 
 ## Not verified
 - A real iPhone's home-screen app (standalone window, status bar, how long iOS keeps the cache: Safari may
@@ -114,6 +117,14 @@ must restart it; the cold open and weak-signal checks also require the worker (n
 - In the home-screen app, the "All games" link (`../`) leaves the game's scope, so iOS opens it in a Safari sheet.
 
 ## Changelog
+- **1.4.0** (2026-10-28): no more "Fetch API cannot load … due to access control checks" console errors
+  when a page leaves (reload, navigation) while the deploy check is in flight. WebKit cuts that fetch as soon as
+  a navigation starts and logs it, so games' "no console errors" UI tests failed at random (about 1 in 3 in
+  King of Tokyo when the machine was busy). `pwa.js` now aborts its own fetches on `beforeunload`/`pagehide`
+  (an abort logs nothing), starts no check while the page is leaving (for 3 s after `beforeunload`, in case the
+  navigation is cancelled), and the reload helper aborts its page fetch instead of letting `location.reload()`
+  cut it. New `test/reload.mjs`: on 1.3.0 WebKit 6/7 (3 console errors), Chromium 3/7; on 1.4.0 7/7 both.
+  `sw.js`, `pwa-check.mjs`: version stamp only.
 - **1.3.0** (2026-10-27): `data-extra` on the pwa.js tag lists files the game loads later by script; the
   worker saves them at install and pwa.js hands them over on the first visit. The crawl also picks up
   quoted `.wasm` / `.bin` paths. Fixture: the computer's worker now fetches `data/book.bin` from a run-time

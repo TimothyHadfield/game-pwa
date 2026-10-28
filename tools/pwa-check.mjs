@@ -1,4 +1,4 @@
-// game-pwa pwa-check 1.3.0: proves a game installs its offline copy, plays offline vs the computer,
+// game-pwa pwa-check 1.4.0: proves a game installs its offline copy, plays offline vs the computer,
 // and never shows an old build once a new one is deployed. Copy UNCHANGED to the game's tools/ folder.
 //
 //   node tools/pwa-check.mjs                run every check (WebKit, iPhone 393x659), exit 1 on any failure
