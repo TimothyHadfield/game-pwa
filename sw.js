@@ -1,6 +1,7 @@
-/* game-pwa sw.js 1.2.0: network-first service worker for Tim's board game sites.
+/* game-pwa sw.js 1.3.0: network-first service worker for Tim's board game sites.
  * Copy this file UNCHANGED to the game's root folder (next to index.html). js/pwa.js registers it as
  * "sw.js?v=<build>", so the build number lives in index.html, not here.
+ * Files the game fetches later by script (a solver, an opening book) go in data-extra on the pwa.js tag.
  *
  * Rules (why it can never serve an old build while online):
  *  - Every same-folder GET goes to the network first, revalidated past the browser's HTTP cache
@@ -17,13 +18,16 @@
  *  - Games only: never use it on the Hub at "/" (its scope would cover every game).
  */
 "use strict";
-const KIT = "1.2.0";
+const KIT = "1.3.0";
 const BUILD = new URL(self.location.href).searchParams.get("v") || "0";
 const SCOPE = self.registration.scope;                       // e.g. https://x.github.io/battleship/
 const PREFIX = "pwa:" + new URL(SCOPE).pathname + ":";
 const CACHE = PREFIX + BUILD;
-const ASSET = /["'`]((?:\.{0,2}\/)?[\w\-.\/]+\.(?:m?js|css|svg|png|jpe?g|webp|gif|json|webmanifest|woff2?|ttf|mp3|ogg|wav)(?:\?[\w=.&%-]*)?)["'`]/g;
+const ASSET = /["'`]((?:\.{0,2}\/)?[\w\-.\/]+\.(?:m?js|css|svg|png|jpe?g|webp|gif|json|webmanifest|woff2?|ttf|mp3|ogg|wav|wasm|bin)(?:\?[\w=.&%-]*)?)["'`]/g;
 const HTML_REF = /\b(?:src|href)\s*=\s*["']([^"'#]+)["']/g;
+// files the game loads later by script, at paths no crawl can find: listed on the pwa.js tag,
+// data-extra="js/solver.wasm data/book.bin" (spaces or commas, relative to the page), saved at install
+const EXTRA = /\bdata-extra\s*=\s*["']([^"']*)["']/g;
 const CSS_URL = /url\(\s*["']?([^"')]+)["']?\s*\)/g;
 
 const inScope = u => typeof u === "string" && u.startsWith(SCOPE);
@@ -63,6 +67,7 @@ async function precache() {
   let todo = [];
   for (const m of html.matchAll(HTML_REF)) todo.push(refs(m[1]));
   for (const m of html.matchAll(ASSET)) todo.push(refs(m[1]));
+  for (const m of html.matchAll(EXTRA)) for (const u of m[1].split(/[\s,]+/)) if (u) todo.push(refs(u));
   const done = new Set([SCOPE]);
   for (let depth = 0; depth < 3 && todo.length; depth++) {
     const batch = todo.filter(u => u && inScope(u) && !done.has(u));

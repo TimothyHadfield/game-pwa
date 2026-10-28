@@ -72,12 +72,21 @@ $0, no build step, no dependencies. Pilots: [Battleship](https://timothyhadfield
    player picks Online (the shared `_online` kit already does). The computer opponent's worker scripts are
    found automatically (the worker crawls the page, its scripts, `importScripts` and CSS `url()`s, and also
    saves everything the first visit loaded).
+   **Files loaded later by script** (a solver `.wasm`, an opening book, puzzles fetched by a worker only
+   when the computer first thinks, at a path built at run time) can't be found by the crawl: list them on
+   the pwa.js tag, space- or comma-separated, relative to the page:
+   ```html
+   <script src="js/pwa.js?v=N" data-version="N" data-extra="js/solver.wasm data/book7x6.bin" defer></script>
+   ```
+   They're saved with the rest of the build at install (a missing one is skipped), still network-first online.
+   No game code needed (Connect Four's old `postMessage({type:"pwa:cache"})` workaround can go).
 7. Test: add `tests/pwa-check.json` (see the top of `tools/pwa-check.mjs`; Battleship's and Checkers' are
    examples) and run `node tools/pwa-check.mjs`. Watch it fail first on the game without the kit.
 8. After the push: open the live page once, then in phone-view check `navigator.serviceWorker.controller`
    and that the page still loads with the connection off.
 
 ## API (`window.PWA`)
+Tag attributes: `data-version` (build), `data-sw` (worker path, default `sw.js`), `data-extra` (later-loaded files).
 `PWA.version` (data-version) · `PWA.kit` · `PWA.safeToReload = fn` · `PWA.check()` → Promise&lt;bool&gt; (force a
 deploy check now) · `PWA.onUpdate(fn)` (called with `{build, lastModified}` when a deploy is found) ·
 `PWA.reload()` · `PWA.status()` → Promise&lt;{kit, build, cache}|null&gt; (from the active worker).
@@ -105,6 +114,11 @@ must restart it; the cold open and weak-signal checks also require the worker (n
 - In the home-screen app, the "All games" link (`../`) leaves the game's scope, so iOS opens it in a Safari sheet.
 
 ## Changelog
+- **1.3.0** (2026-10-27): `data-extra` on the pwa.js tag lists files the game loads later by script; the
+  worker saves them at install and pwa.js hands them over on the first visit. The crawl also picks up
+  quoted `.wasm` / `.bin` paths. Fixture: the computer's worker now fetches `data/book.bin` from a run-time
+  path during its first move; on 1.2.0 the offline move fails (16/18), on 1.3.0 18/18 (WebKit + Chromium).
+  pwa-check serves `.wasm` as `application/wasm`.
 - **1.2.0** (2026-10-27): pwa-check fix for "offline cold open" failing at random in WebKit. Cause: the
   check's in-memory browser profile, where WebKit drops cached files once the idle worker is stopped (a
   phone's storage is on disk; with an on-disk profile all files survive). The check now uses an on-disk temp

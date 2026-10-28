@@ -1,7 +1,9 @@
-/* game-pwa pwa.js 1.2.0: registers sw.js and keeps an open page on the newest build.
+/* game-pwa pwa.js 1.3.0: registers sw.js and keeps an open page on the newest build.
  * Copy UNCHANGED to the game's js/ folder and load it from index.html:
  *   <script src="js/pwa.js?v=13" data-version="13" defer></script>
  * data-version = the game's build number (bump it with the other ?v= tags). Optional data-sw="sw.js".
+ * Optional data-extra="js/solver.wasm data/book.bin": files the game loads later by script (not linked
+ * from the page or its scripts); they are saved for offline play too.
  *
  * Fresh build check: on load, on every return to the page and when the connection comes back
  * (at most once a minute), a no-store HEAD of the page compares the server's Last-Modified with
@@ -14,10 +16,11 @@
  */
 (function () {
   "use strict";
-  var KIT = "1.2.0";
+  var KIT = "1.3.0";
   var me = document.currentScript;
   var build = (me && me.getAttribute("data-version")) || "0";
   var swPath = (me && me.getAttribute("data-sw")) || "sw.js";
+  var extra = ((me && me.getAttribute("data-extra")) || "").split(/[\s,]+/).filter(Boolean);
   var pageUrl = function () { return location.href.split("#")[0]; };
   var base = Date.parse(document.lastModified);
   var lastCheck = 0, shownFor = 0, dismissed = 0, listeners = [], pill = null;
@@ -118,6 +121,8 @@
       var send = function () {
         var urls = [pageUrl()];
         try { performance.getEntriesByType("resource").forEach(function (e) { urls.push(e.name); }); } catch (e) {}
+        // the game's later-loaded files (data-extra), in case this build's worker installed before they were listed
+        extra.forEach(function (u) { try { urls.push(new URL(u, location.href).href); } catch (e) {} });
         if (reg.active) reg.active.postMessage({ type: "pwa:cache", urls: urls });
       };
       if (document.readyState === "complete") send(); else addEventListener("load", send);

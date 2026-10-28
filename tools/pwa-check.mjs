@@ -1,4 +1,4 @@
-// game-pwa pwa-check 1.2.0: proves a game installs its offline copy, plays offline vs the computer,
+// game-pwa pwa-check 1.3.0: proves a game installs its offline copy, plays offline vs the computer,
 // and never shows an old build once a new one is deployed. Copy UNCHANGED to the game's tools/ folder.
 //
 //   node tools/pwa-check.mjs                run every check (WebKit, iPhone 393x659), exit 1 on any failure
@@ -44,7 +44,7 @@ const IDLE = +opt("idle", 15000);                     // ms with no page open be
 const deploy = { n: 0, time: Math.floor(Date.now() / 1000) * 1000 - 3600e3 };
 const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".mjs": "text/javascript",
   ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png", ".json": "application/json",
-  ".webmanifest": "application/manifest+json", ".ico": "image/x-icon", ".mp3": "audio/mpeg", ".wav": "audio/wav" };
+  ".webmanifest": "application/manifest+json", ".ico": "image/x-icon", ".mp3": "audio/mpeg", ".wav": "audio/wav", ".wasm": "application/wasm" };
 
 function body(file) {
   let buf = readFileSync(file);
